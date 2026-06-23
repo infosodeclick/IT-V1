@@ -12,12 +12,46 @@ function cleanDisplay(value: unknown) {
   return String(value);
 }
 
-function fieldControl(field: FieldDefinition) {
+function formDefaultValue(record: AppRecord | null, field: FieldDefinition) {
+  if (!record || field.type === "password") return undefined;
+
+  switch (field.target) {
+    case "title":
+      return record.title;
+    case "description":
+      return record.description || "";
+    case "status":
+      return record.status || "";
+    case "priority":
+      return record.priority || "";
+    case "category":
+      return record.category || "";
+    case "owner":
+      return record.owner || "";
+    case "department":
+      return record.department || "";
+    case "dueDate":
+      return record.dueDate || "";
+    case "costMonthly":
+      return record.costMonthly ?? "";
+    default:
+      return record.meta[field.name] ?? "";
+  }
+}
+
+function errorMessage(error?: string) {
+  if (error === "duplicate") return "Username หรือ Email นี้มีอยู่ในระบบแล้ว";
+  return "กรุณากรอกข้อมูลที่จำเป็นให้ครบ";
+}
+
+function fieldControl(field: FieldDefinition, defaultValue?: unknown) {
+  const stringDefault = typeof defaultValue === "string" || typeof defaultValue === "number" ? String(defaultValue) : undefined;
   const common = {
     id: field.name,
     name: field.name,
     required: field.required,
-    placeholder: field.placeholder
+    placeholder: field.placeholder,
+    defaultValue: stringDefault
   };
 
   if (field.type === "textarea") {
@@ -26,7 +60,7 @@ function fieldControl(field: FieldDefinition) {
 
   if (field.type === "select") {
     return (
-      <select id={field.name} name={field.name} required={field.required} defaultValue="">
+      <select id={field.name} name={field.name} required={field.required} defaultValue={stringDefault || ""}>
         <option value="" disabled={field.required}>
           เลือก
         </option>
@@ -42,7 +76,7 @@ function fieldControl(field: FieldDefinition) {
   if (field.type === "checkbox") {
     return (
       <label className="checkbox-line">
-        <input type="checkbox" name={field.name} />
+        <input type="checkbox" name={field.name} defaultChecked={Boolean(defaultValue)} />
         <span>{field.placeholder || field.label}</span>
       </label>
     );
@@ -61,6 +95,7 @@ function renderValue(record: AppRecord, key: string, tone?: string) {
 
 function nextStatusFor(module: ModuleDefinition, record: AppRecord) {
   const status = record.status || "";
+  if (module.id === "users") return status === "active" ? "inactive" : "active";
   if (module.id === "checkout") return status === "ยืมอยู่" ? "คืนแล้ว" : "ยืมอยู่";
   if (module.id === "pm-calendar") return "ทำแล้ว";
   if (module.id.includes("request") || status.includes("รอ")) return "อนุมัติแล้ว";
@@ -119,9 +154,10 @@ function FilterBar({ module }: { module: ModuleDefinition }) {
   );
 }
 
-function CreateForm({ module }: { module: ModuleDefinition }) {
+function CreateForm({ module, records }: { module: ModuleDefinition; records: AppRecord[] }) {
   if (!module.createFields?.length) return null;
   const action = createRecordAction.bind(null, module.path);
+  const defaults = module.special === "settings" || module.special === "profile" ? records[0] || null : null;
 
   return (
     <section className="panel form-panel" id="create">
@@ -135,7 +171,7 @@ function CreateForm({ module }: { module: ModuleDefinition }) {
         {module.createFields.map((field) => (
           <label className={field.type === "textarea" ? "span-2" : ""} key={field.name}>
             <span>{field.label}</span>
-            {fieldControl(field)}
+            {fieldControl(field, formDefaultValue(defaults, field))}
           </label>
         ))}
         <div className="form-actions span-2">
@@ -187,8 +223,8 @@ function RecordsTable({ module, records }: { module: ModuleDefinition; records: 
                           <Check size={14} aria-hidden="true" />
                         </button>
                       </form>
-                      <form action={updateStatusAction.bind(null, record.id, "ปิด", module.path)}>
-                        <button className="mini-action danger" type="submit" title="ปิดรายการ">
+                      <form action={updateStatusAction.bind(null, record.id, module.id === "users" ? "inactive" : "ปิด", module.path)}>
+                        <button className="mini-action danger" type="submit" title={module.id === "users" ? "ปิดการใช้งาน" : "ปิดรายการ"}>
                           <X size={14} aria-hidden="true" />
                         </button>
                       </form>
@@ -323,7 +359,7 @@ export function ModulePage({
       </div>
 
       {created ? <div className="notice good">บันทึกข้อมูลเรียบร้อยแล้ว</div> : null}
-      {error ? <div className="notice bad">กรุณากรอกข้อมูลที่จำเป็นให้ครบ</div> : null}
+      {error ? <div className="notice bad">{errorMessage(error)}</div> : null}
 
       {module.special === "calendar" ? <CalendarView records={records} /> : null}
       {module.special === "qr" ? <QrView records={records} /> : null}
@@ -332,7 +368,7 @@ export function ModulePage({
       {!showOnlyForm && !module.special ? <SummaryStrip records={records} /> : null}
       {!showOnlyForm ? <FilterBar module={module} /> : null}
       {!showOnlyForm && !module.special ? <RecordsTable module={module} records={records} /> : null}
-      <CreateForm module={module} />
+      <CreateForm module={module} records={records} />
     </div>
   );
 }

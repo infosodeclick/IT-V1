@@ -62,6 +62,50 @@ def main() -> None:
         assert response.ok, f"CSV report failed with {response.status}"
         assert "ทดสอบสร้าง Ticket จาก Playwright" in response.text()
 
+        suffix = str(int(time.time()))
+        username = f"qa{suffix}"
+        email = f"{username}@example.local"
+        password = "QaPass123!"
+        full_name = f"QA User {suffix}"
+
+        goto_ready(page, "/users")
+        page.locator("#create input[name='title']").fill(full_name)
+        page.locator("#create input[name='owner']").fill(username)
+        page.locator("#create input[name='email']").fill(email)
+        page.locator("#create input[name='password']").fill(password)
+        page.locator("#create input[name='phone']").fill("02-222-2222")
+        page.locator("#create select[name='category']").select_option("it_staff")
+        page.locator("#create select[name='department']").select_option("IT Department")
+        page.locator("#create form button[type='submit']").click()
+        page.wait_for_url("**/users?created=1")
+        expect(page.get_by_text(username).first).to_be_visible()
+
+        page.context.clear_cookies()
+        goto_ready(page, "/login")
+        page.locator("input[name='login']").fill(username)
+        page.locator("input[name='password']").fill(password)
+        page.locator("form.login-form button[type='submit']").click()
+        expect(page).to_have_url(re.compile(r".*/dashboard"))
+        expect(page.get_by_text(full_name).first).to_be_visible()
+
+        goto_ready(page, "/profile")
+        expect(page.locator("#create input[name='title']")).to_have_value(full_name)
+        expect(page.locator("#create input[name='email']")).to_have_value(email)
+        page.locator("#create input[name='phone']").fill("02-333-3333")
+        page.locator("#create input[name='lineUserId']").fill(f"U-{username}")
+        page.locator("#create form button[type='submit']").click()
+        page.wait_for_url("**/profile?created=1")
+        expect(page.locator("#create input[name='phone']")).to_have_value("02-333-3333")
+
+        goto_ready(page, "/settings")
+        expect(page.locator("#create input[name='title']")).not_to_have_value("")
+        page.locator("#create input[name='company']").fill("BUGpairoj QA")
+        page.locator("#create input[name='itemsPerPage']").fill("25")
+        page.locator("#create form button[type='submit']").click()
+        page.wait_for_url("**/settings?created=1")
+        expect(page.locator("#create input[name='company']")).to_have_value("BUGpairoj QA")
+        expect(page.locator("#create input[name='itemsPerPage']")).to_have_value("25")
+
         page.set_viewport_size({"width": 390, "height": 900})
         goto_ready(page, "/dashboard")
         overflow = page.evaluate("document.documentElement.scrollWidth > window.innerWidth + 1")

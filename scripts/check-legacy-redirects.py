@@ -13,9 +13,51 @@ PASSWORD = os.environ.get("ITAM_PASSWORD", "Admin@1234")
 LEGACY_PATHS = {
     "/itam-desk/dashboard.php": "/dashboard",
     "/itam-desk/modules/tickets/index.php": "/tickets",
+    "/itam-desk/modules/tickets/create.php": "/tickets/new",
+    "/itam-desk/modules/service_request/index.php": "/service-requests",
+    "/itam-desk/modules/service_requests/index.php": "/service-requests",
+    "/itam-desk/modules/access_request/index.php": "/access-requests",
+    "/itam-desk/modules/access_requests/index.php": "/access-requests",
+    "/itam-desk/modules/pm_calendar/index.php": "/pm-calendar",
     "/itam-desk/modules/assets_mgmt/index.php": "/assets",
+    "/itam-desk/modules/checkout/index.php": "/checkout",
+    "/itam-desk/modules/assets_mgmt/checkout.php": "/checkout",
+    "/itam-desk/modules/assets_mgmt/requests.php": "/asset-requests",
+    "/itam-desk/modules/qr_scanner/index.php": "/qr-scanner",
+    "/itam-desk/modules/assets_mgmt/qr_scan.php": "/qr-scanner",
+    "/itam-desk/modules/asset_audit/index.php": "/asset-audit",
+    "/itam-desk/modules/assets_mgmt/audit.php": "/asset-audit",
+    "/itam-desk/modules/licenses/index.php": "/licenses",
+    "/itam-desk/modules/subscriptions/index.php": "/subscriptions",
+    "/itam-desk/modules/licenses/subscriptions.php": "/subscriptions",
+    "/itam-desk/modules/budget/index.php": "/budget",
+    "/itam-desk/modules/licenses/budget.php": "/budget",
+    "/itam-desk/modules/licenses/by_asset.php": "/licenses/by-asset",
+    "/itam-desk/modules/vendors/index.php": "/vendors",
+    "/itam-desk/modules/vendors/create.php": "/vendors/new",
+    "/itam-desk/modules/vault/index.php": "/vault",
+    "/itam-desk/modules/security/vault.php": "/vault",
+    "/itam-desk/modules/settings/audit.php": "/audit-log",
+    "/itam-desk/modules/audit_log/index.php": "/audit-log",
+    "/itam-desk/modules/offboarding/index.php": "/offboarding",
+    "/itam-desk/modules/hr/offboarding.php": "/offboarding",
+    "/itam-desk/modules/kb/index.php": "/knowledge-base",
+    "/itam-desk/modules/knowledge/index.php": "/knowledge-base",
+    "/itam-desk/modules/reports/index.php": "/reports",
+    "/itam-desk/modules/settings/users.php": "/users",
+    "/itam-desk/modules/users/index.php": "/users",
+    "/itam-desk/modules/settings/index.php": "/settings",
     "/itam-desk/modules/settings/profile.php": "/profile",
+    "/itam-desk/modules/calendar/index.php": "/calendar",
     "/modules/tickets/index.php": "/tickets",
+    "/modules/assets_mgmt/checkout.php": "/checkout",
+    "/modules/licenses/subscriptions.php": "/subscriptions",
+    "/modules/users/index.php": "/users",
+}
+
+API_PATHS = {
+    "/api/notifications.php?action=unread_count": "unread_count",
+    "/itam-desk/api/notifications.php?action=unread_count": "unread_count",
 }
 
 
@@ -53,6 +95,17 @@ def main() -> None:
                 "final": final_path,
                 "status": response.status if response else None,
                 "ok": ok,
+            })
+
+        for api_path, expected_key in API_PATHS.items():
+            response = page.request.get(f"{BASE_URL}{api_path}")
+            data = response.json() if response.ok else {}
+            results.append({
+                "legacy": api_path,
+                "expected": expected_key,
+                "final": api_path,
+                "status": response.status,
+                "ok": response.ok and expected_key in data,
             })
 
         browser.close()

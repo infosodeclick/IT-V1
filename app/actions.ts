@@ -5,7 +5,16 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { clearSession, requireUser, setSession } from "@/lib/auth";
-import { countRecords, createRecord, getUserByUsername, touchLastLogin, updateRecordStatus } from "@/lib/db";
+import {
+  countRecords,
+  createRecord,
+  createUserAccount,
+  getUserByUsername,
+  touchLastLogin,
+  updateCurrentUserProfile,
+  updateRecordStatus,
+  updateSystemSettings
+} from "@/lib/db";
 import { getModuleByPath } from "@/lib/definitions";
 import type { FieldDefinition, ModuleDefinition, RecordMeta } from "@/lib/types";
 
@@ -18,6 +27,11 @@ function numberValue(value: string) {
   if (!value) return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function actionErrorCode(error: unknown) {
+  if (error instanceof Error && error.message === "DUPLICATE_USER") return "duplicate";
+  return "required";
 }
 
 function codeFor(module: ModuleDefinition, nextCount: number) {
@@ -72,6 +86,97 @@ export async function createRecordAction(modulePath: string, formData: FormData)
   const actor = await requireUser();
   const module = getModuleByPath(modulePath);
   if (!module) redirect("/dashboard");
+  const path = targetPath(module);
+
+  if (module.id === "users") {
+    const fullName = stringValue(formData, "title");
+    const username = stringValue(formData, "owner");
+    const email = stringValue(formData, "email");
+    const password = stringValue(formData, "password");
+
+    if (!fullName || !username || !email || !password) {
+      redirect(`${path}?error=required`);
+    }
+
+    const nextCount = (await countRecords(module.id)) + 1;
+    try {
+      await createUserAccount(
+        {
+          code: codeFor(module, nextCount),
+          fullName,
+          username,
+          email,
+          password,
+          role: stringValue(formData, "category") || "user",
+          department: stringValue(formData, "department") || actor.department,
+          phone: stringValue(formData, "phone") || null,
+          status: module.defaultStatus || "active"
+        },
+        actor
+      );
+    } catch (error) {
+      redirect(`${path}?error=${actionErrorCode(error)}`);
+    }
+
+    revalidatePath(path);
+    revalidatePath("/dashboard");
+    redirect(`${path}?created=1`);
+  }
+
+  if (module.special === "settings") {
+    try {
+      await updateSystemSettings(
+        {
+          systemName: stringValue(formData, "title"),
+          companyName: stringValue(formData, "company"),
+          companyEmail: stringValue(formData, "companyEmail"),
+          companyPhone: stringValue(formData, "companyPhone"),
+          lowSla: numberValue(stringValue(formData, "lowSla")),
+          mediumSla: numberValue(stringValue(formData, "mediumSla")),
+          highSla: numberValue(stringValue(formData, "highSla")),
+          criticalSla: numberValue(stringValue(formData, "criticalSla")),
+          itemsPerPage: numberValue(stringValue(formData, "itemsPerPage")),
+          maxUploadMb: numberValue(stringValue(formData, "maxUploadMb"))
+        },
+        actor
+      );
+    } catch (error) {
+      redirect(`${path}?error=${actionErrorCode(error)}`);
+    }
+
+    revalidatePath(path);
+    revalidatePath("/dashboard");
+    redirect(`${path}?created=1`);
+  }
+
+  if (module.special === "profile") {
+    const fullName = stringValue(formData, "title");
+    const email = stringValue(formData, "email");
+
+    if (!fullName || !email) {
+      redirect(`${path}?error=required`);
+    }
+
+    try {
+      await updateCurrentUserProfile(
+        actor.id,
+        {
+          fullName,
+          email,
+          phone: stringValue(formData, "phone") || null,
+          lineUserId: stringValue(formData, "lineUserId") || null,
+          password: stringValue(formData, "password") || null
+        },
+        actor
+      );
+    } catch (error) {
+      redirect(`${path}?error=${actionErrorCode(error)}`);
+    }
+
+    revalidatePath(path);
+    revalidatePath("/dashboard");
+    redirect(`${path}?created=1`);
+  }
 
   const meta: RecordMeta = {};
   const input = {
@@ -141,7 +246,6 @@ export async function createRecordAction(modulePath: string, formData: FormData)
     actor
   );
 
-  const path = targetPath(module);
   revalidatePath(path);
   revalidatePath("/dashboard");
   redirect(`${path}?created=1`);

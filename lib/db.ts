@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import pg from "pg";
+import pg, { type QueryResult } from "pg";
 
 import { seedAuditLogs, seedRecords, seedSettings } from "@/lib/seed";
 import type { AppRecord, AppSetting, AppUser, AuditLog, RecordMeta } from "@/lib/types";
@@ -31,6 +31,43 @@ type RecordInput = {
   dueDate?: string | null;
   costMonthly?: number | null;
   meta?: RecordMeta;
+};
+
+type UserAccountInput = {
+  code?: string | null;
+  fullName: string;
+  username: string;
+  email: string;
+  password: string;
+  role: string;
+  department: string;
+  phone?: string | null;
+  status?: string | null;
+};
+
+type ProfileInput = {
+  fullName: string;
+  email: string;
+  phone?: string | null;
+  lineUserId?: string | null;
+  password?: string | null;
+};
+
+type SystemSettingsInput = {
+  systemName?: string | null;
+  companyName?: string | null;
+  companyEmail?: string | null;
+  companyPhone?: string | null;
+  lowSla?: number | null;
+  mediumSla?: number | null;
+  highSla?: number | null;
+  criticalSla?: number | null;
+  itemsPerPage?: number | null;
+  maxUploadMb?: number | null;
+};
+
+type Queryable = {
+  query<T extends Record<string, unknown> = Record<string, unknown>>(text: string, params?: unknown[]): Promise<QueryResult<T>>;
 };
 
 let pool: InstanceType<typeof Pool> | null = null;
@@ -154,12 +191,50 @@ async function ensurePostgres() {
   await initPromise;
 }
 
-async function insertRecordPostgres(db: InstanceType<typeof Pool>, item: AppRecord) {
+async function insertRecordPostgres(db: Queryable, item: AppRecord) {
   await db.query(
     `INSERT INTO app_records
        (id, module, code, title, description, status, priority, category, owner, department, due_date, cost_monthly, meta, created_at, updated_at)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15)
      ON CONFLICT (id) DO NOTHING`,
+    [
+      item.id,
+      item.module,
+      item.code,
+      item.title,
+      item.description,
+      item.status,
+      item.priority,
+      item.category,
+      item.owner,
+      item.department,
+      item.dueDate,
+      item.costMonthly,
+      JSON.stringify(item.meta),
+      item.createdAt,
+      item.updatedAt
+    ]
+  );
+}
+
+async function upsertRecordPostgres(db: Queryable, item: AppRecord) {
+  await db.query(
+    `INSERT INTO app_records
+       (id, module, code, title, description, status, priority, category, owner, department, due_date, cost_monthly, meta, created_at, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15)
+     ON CONFLICT (id) DO UPDATE SET
+       code = EXCLUDED.code,
+       title = EXCLUDED.title,
+       description = EXCLUDED.description,
+       status = EXCLUDED.status,
+       priority = EXCLUDED.priority,
+       category = EXCLUDED.category,
+       owner = EXCLUDED.owner,
+       department = EXCLUDED.department,
+       due_date = EXCLUDED.due_date,
+       cost_monthly = EXCLUDED.cost_monthly,
+       meta = EXCLUDED.meta,
+       updated_at = EXCLUDED.updated_at`,
     [
       item.id,
       item.module,
@@ -223,6 +298,119 @@ async function readJsonDb(): Promise<JsonDb> {
 async function writeJsonDb(db: JsonDb) {
   await fs.mkdir(path.dirname(localDbPath), { recursive: true });
   await fs.writeFile(localDbPath, `${JSON.stringify(db, null, 2)}\n`, "utf8");
+}
+
+function duplicateUserError() {
+  return new Error("DUPLICATE_USER");
+}
+
+function invalidInputError() {
+  return new Error("INVALID_INPUT");
+}
+
+function normalizeUserStatus(status?: string | null) {
+  const value = (status || "active").trim().toLowerCase();
+  if (value === "inactive" || value === "disabled" || value === "ปิด") return "inactive";
+  return "active";
+}
+
+function userRecordId(userId: string) {
+  return userId === "admin" ? "user-record-admin" : `user-record-${userId}`;
+}
+
+function profileRecordId(userId: string) {
+  return userId === "admin" ? "profile-record" : `profile-record-${userId}`;
+}
+
+function userRecordFromUser(user: AppUser, timestamp: string, code?: string | null): AppRecord {
+  return {
+    id: userRecordId(user.id),
+    module: "users",
+    code: code || (user.id === "admin" ? "USR-00001" : null),
+    title: user.fullName,
+    description: "บัญชีผู้ใช้งานระบบ",
+    status: user.status,
+    priority: null,
+    category: user.role,
+    owner: user.username,
+    department: user.department,
+    dueDate: null,
+    costMonthly: null,
+    meta: {
+      email: user.email,
+      phone: user.phone || "",
+      lastLogin: user.lastLogin || "-"
+    },
+    createdAt: user.createdAt,
+    updatedAt: timestamp
+  };
+}
+
+function profileRecordFromUser(user: AppUser, timestamp: string, lineUserId?: string | null): AppRecord {
+  return {
+    id: profileRecordId(user.id),
+    module: "profile",
+    code: "ME",
+    title: user.fullName,
+    description: user.department,
+    status: user.status,
+    priority: null,
+    category: user.role,
+    owner: user.username,
+    department: user.department,
+    dueDate: null,
+    costMonthly: null,
+    meta: {
+      email: user.email,
+      phone: user.phone || "",
+      lineUserId: lineUserId || ""
+    },
+    createdAt: user.createdAt,
+    updatedAt: timestamp
+  };
+}
+
+function settingsRecordFromValue(value: RecordMeta, timestamp: string): AppRecord {
+  return {
+    id: "settings-record",
+    module: "settings",
+    code: "SYS-SETTINGS",
+    title: String(value.systemName || "ITAM Desk"),
+    description: "ตั้งค่าระบบหลัก, SLA, notification และ upload limit",
+    status: "active",
+    priority: null,
+    category: "system",
+    owner: "System Administrator",
+    department: "IT Department",
+    dueDate: null,
+    costMonthly: null,
+    meta: {
+      company: value.companyName || "",
+      companyEmail: value.companyEmail || "",
+      companyPhone: value.companyPhone || "",
+      itemsPerPage: value.itemsPerPage || 20,
+      maxUploadMb: value.maxUploadMb || 10,
+      lowSla: value.lowSla || 72,
+      mediumSla: value.mediumSla || 24,
+      highSla: value.highSla || 8,
+      criticalSla: value.criticalSla || 2
+    },
+    createdAt: timestamp,
+    updatedAt: timestamp
+  };
+}
+
+function upsertLocalRecord(records: AppRecord[], item: AppRecord) {
+  const index = records.findIndex((record) => record.id === item.id);
+  if (index === -1) {
+    records.unshift(item);
+    return;
+  }
+
+  records[index] = {
+    ...item,
+    createdAt: records[index].createdAt
+  };
 }
 
 function rowToUser(row: Record<string, unknown>): AppUser {
@@ -452,29 +640,239 @@ export async function createRecord(input: RecordInput, actor?: AppUser | null) {
   return item;
 }
 
-export async function updateRecordStatus(id: string, status: string, actor?: AppUser | null) {
+export async function createUserAccount(input: UserAccountInput, actor?: AppUser | null) {
   const timestamp = new Date().toISOString();
-  let module = "records";
+  const username = input.username.trim().toLowerCase();
+  const email = input.email.trim().toLowerCase();
+  const fullName = input.fullName.trim();
+  const password = input.password.trim();
+  const role = input.role || "user";
+  const department = input.department || "IT Department";
+  const status = normalizeUserStatus(input.status);
+
+  if (!username || !email || !fullName || !password) {
+    throw invalidInputError();
+  }
+
+  const passwordHash = await bcrypt.hash(password, 10);
+  const user: AppUser = {
+    id: `user-${randomUUID()}`,
+    username,
+    email,
+    passwordHash,
+    fullName,
+    role,
+    department,
+    phone: input.phone || null,
+    status,
+    lastLogin: null,
+    createdAt: timestamp,
+    updatedAt: timestamp
+  };
+  const record = userRecordFromUser(user, timestamp, input.code || null);
+  const profileRecord = profileRecordFromUser(user, timestamp, "");
 
   if (hasPostgres()) {
     await ensurePostgres();
-    const current = await getPool().query("SELECT module FROM app_records WHERE id = $1", [id]);
+    const client = await getPool().connect();
+    try {
+      await client.query("BEGIN");
+      const duplicate = await client.query("SELECT id FROM app_users WHERE LOWER(username) = $1 OR LOWER(email) = $2 LIMIT 1", [username, email]);
+      if (duplicate.rows[0]) {
+        await client.query("ROLLBACK");
+        throw duplicateUserError();
+      }
+
+      await client.query(
+        `INSERT INTO app_users (id, username, email, password_hash, full_name, role, department, phone, status, created_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$10)`,
+        [user.id, user.username, user.email, user.passwordHash, user.fullName, user.role, user.department, user.phone, user.status, timestamp]
+      );
+      await insertRecordPostgres(client, record);
+      await insertRecordPostgres(client, profileRecord);
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  } else {
+    const db = await readJsonDb();
+    const duplicate = db.users.find((item) => item.username.toLowerCase() === username || item.email.toLowerCase() === email);
+    if (duplicate) throw duplicateUserError();
+
+    db.users.unshift(user);
+    upsertLocalRecord(db.records, record);
+    upsertLocalRecord(db.records, profileRecord);
+    await writeJsonDb(db);
+  }
+
+  await addAuditLog({
+    actor,
+    module: "users",
+    action: "create_user",
+    recordId: user.id
+  });
+
+  return user;
+}
+
+export async function updateSystemSettings(input: SystemSettingsInput, actor?: AppUser | null) {
+  const timestamp = new Date().toISOString();
+  const current = await getSettings();
+  const next: RecordMeta = { ...current };
+
+  for (const [key, value] of Object.entries(input)) {
+    if (value === undefined || value === null || value === "") continue;
+    next[key] = value;
+  }
+
+  const record = settingsRecordFromValue(next, timestamp);
+
+  if (hasPostgres()) {
+    await ensurePostgres();
+    await getPool().query(
+      `INSERT INTO app_settings (key, value, updated_at)
+       VALUES ('system', $1::jsonb, $2)
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at`,
+      [JSON.stringify(next), timestamp]
+    );
+    await upsertRecordPostgres(getPool(), record);
+  } else {
+    const db = await readJsonDb();
+    const index = db.settings.findIndex((setting) => setting.key === "system");
+    const setting: AppSetting = { key: "system", value: next, updatedAt: timestamp };
+    if (index === -1) db.settings.unshift(setting);
+    else db.settings[index] = setting;
+    upsertLocalRecord(db.records, record);
+    await writeJsonDb(db);
+  }
+
+  await addAuditLog({
+    actor,
+    module: "settings",
+    action: "update_settings",
+    recordId: "system"
+  });
+}
+
+export async function updateCurrentUserProfile(userId: string, input: ProfileInput, actor?: AppUser | null) {
+  const timestamp = new Date().toISOString();
+  const fullName = input.fullName.trim();
+  const email = input.email.trim().toLowerCase();
+
+  if (!fullName || !email) {
+    throw invalidInputError();
+  }
+
+  const passwordHash = input.password?.trim() ? await bcrypt.hash(input.password.trim(), 10) : null;
+  let updatedUser: AppUser | null = null;
+
+  if (hasPostgres()) {
+    await ensurePostgres();
+    const client = await getPool().connect();
+    try {
+      await client.query("BEGIN");
+      const duplicate = await client.query("SELECT id FROM app_users WHERE LOWER(email) = $1 AND id <> $2 LIMIT 1", [email, userId]);
+      if (duplicate.rows[0]) {
+        await client.query("ROLLBACK");
+        throw duplicateUserError();
+      }
+
+      const result = await client.query(
+        `UPDATE app_users
+         SET full_name = $1,
+             email = $2,
+             phone = $3,
+             password_hash = COALESCE($4, password_hash),
+             updated_at = $5
+         WHERE id = $6
+         RETURNING *`,
+        [fullName, email, input.phone || null, passwordHash, timestamp, userId]
+      );
+      updatedUser = result.rows[0] ? rowToUser(result.rows[0]) : null;
+      if (!updatedUser) throw invalidInputError();
+
+      const existingUserRecord = await client.query("SELECT code FROM app_records WHERE id = $1 LIMIT 1", [userRecordId(userId)]);
+      await upsertRecordPostgres(client, userRecordFromUser(updatedUser, timestamp, existingUserRecord.rows[0]?.code ? String(existingUserRecord.rows[0].code) : undefined));
+      await upsertRecordPostgres(client, profileRecordFromUser(updatedUser, timestamp, input.lineUserId || null));
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  } else {
+    const db = await readJsonDb();
+    const duplicate = db.users.find((item) => item.email.toLowerCase() === email && item.id !== userId);
+    if (duplicate) throw duplicateUserError();
+
+    db.users = db.users.map((user) => {
+      if (user.id !== userId) return user;
+      updatedUser = {
+        ...user,
+        fullName,
+        email,
+        phone: input.phone || null,
+        passwordHash: passwordHash || user.passwordHash,
+        updatedAt: timestamp
+      };
+      return updatedUser;
+    });
+
+    if (!updatedUser) throw invalidInputError();
+
+    const existingUserRecord = db.records.find((record) => record.id === userRecordId(userId));
+    upsertLocalRecord(db.records, userRecordFromUser(updatedUser, timestamp, existingUserRecord?.code));
+    upsertLocalRecord(db.records, profileRecordFromUser(updatedUser, timestamp, input.lineUserId || null));
+    await writeJsonDb(db);
+  }
+
+  await addAuditLog({
+    actor,
+    module: "profile",
+    action: "update_profile",
+    recordId: userId
+  });
+}
+
+export async function updateRecordStatus(id: string, status: string, actor?: AppUser | null) {
+  const timestamp = new Date().toISOString();
+  let module = "records";
+  let owner: string | null = null;
+  let nextStatus = status;
+
+  if (hasPostgres()) {
+    await ensurePostgres();
+    const current = await getPool().query("SELECT module, owner FROM app_records WHERE id = $1", [id]);
     module = current.rows[0]?.module || module;
-    await getPool().query("UPDATE app_records SET status = $1, updated_at = $2 WHERE id = $3", [status, timestamp, id]);
+    owner = current.rows[0]?.owner ? String(current.rows[0].owner) : null;
+    nextStatus = module === "users" ? normalizeUserStatus(status) : status;
+    await getPool().query("UPDATE app_records SET status = $1, updated_at = $2 WHERE id = $3", [nextStatus, timestamp, id]);
+    if (module === "users" && owner) {
+      await getPool().query("UPDATE app_users SET status = $1, updated_at = $2 WHERE LOWER(username) = $3", [nextStatus, timestamp, owner.toLowerCase()]);
+    }
   } else {
     const db = await readJsonDb();
     db.records = db.records.map((record) => {
       if (record.id !== id) return record;
       module = record.module;
-      return { ...record, status, updatedAt: timestamp };
+      owner = record.owner || null;
+      nextStatus = module === "users" ? normalizeUserStatus(status) : status;
+      return { ...record, status: nextStatus, updatedAt: timestamp };
     });
+    if (module === "users" && owner) {
+      db.users = db.users.map((user) => (user.username.toLowerCase() === owner!.toLowerCase() ? { ...user, status: nextStatus, updatedAt: timestamp } : user));
+    }
     await writeJsonDb(db);
   }
 
   await addAuditLog({
     actor,
     module,
-    action: `update_status:${status}`,
+    action: `update_status:${nextStatus}`,
     recordId: id
   });
 }

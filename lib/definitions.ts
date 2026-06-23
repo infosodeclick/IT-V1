@@ -619,8 +619,9 @@ export const modules: ModuleDefinition[] = [
     codePrefix: "USR",
     createFields: [
       { name: "title", label: "ชื่อ-นามสกุล *", type: "text", required: true, target: "title" },
-      { name: "owner", label: "Username *", type: "text", target: "owner" },
-      { name: "email", label: "Email *", type: "email" },
+      { name: "owner", label: "Username *", type: "text", required: true, target: "owner" },
+      { name: "email", label: "Email *", type: "email", required: true },
+      { name: "password", label: "รหัสผ่านเริ่มต้น *", type: "password", required: true },
       { name: "phone", label: "เบอร์โทร", type: "text" },
       { name: "category", label: "Role", type: "select", options: ["super_admin", "admin", "it_staff", "user"], target: "category" },
       { name: "department", label: "แผนก", type: "select", options: departmentOptions, target: "department" }

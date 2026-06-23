@@ -1,37 +1,42 @@
 import type { NextConfig } from "next";
 
+const legacyRedirects = [
+  ["/login.php", "/login"],
+  ["/dashboard.php", "/dashboard"],
+  ["/modules/calendar/index.php", "/calendar"],
+  ["/modules/tickets/index.php", "/tickets"],
+  ["/modules/tickets/create.php", "/tickets/new"],
+  ["/modules/service_request/index.php", "/service-requests"],
+  ["/modules/access_request/index.php", "/access-requests"],
+  ["/modules/pm_calendar/index.php", "/pm-calendar"],
+  ["/modules/assets_mgmt/index.php", "/assets"],
+  ["/modules/checkout/index.php", "/checkout"],
+  ["/modules/assets_mgmt/requests.php", "/asset-requests"],
+  ["/modules/qr_scanner/index.php", "/qr-scanner"],
+  ["/modules/asset_audit/index.php", "/asset-audit"],
+  ["/modules/licenses/index.php", "/licenses"],
+  ["/modules/subscriptions/index.php", "/subscriptions"],
+  ["/modules/budget/index.php", "/budget"],
+  ["/modules/licenses/by_asset.php", "/licenses/by-asset"],
+  ["/modules/vendors/index.php", "/vendors"],
+  ["/modules/vendors/create.php", "/vendors/new"],
+  ["/modules/vault/index.php", "/vault"],
+  ["/modules/settings/audit.php", "/audit-log"],
+  ["/modules/offboarding/index.php", "/offboarding"],
+  ["/modules/kb/index.php", "/knowledge-base"],
+  ["/modules/reports/index.php", "/reports"],
+  ["/modules/settings/users.php", "/users"],
+  ["/modules/settings/index.php", "/settings"],
+  ["/modules/settings/profile.php", "/profile"]
+] as const;
+
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   async redirects() {
-    return [
-      { source: "/login.php", destination: "/login", permanent: false },
-      { source: "/dashboard.php", destination: "/dashboard", permanent: false },
-      { source: "/modules/calendar/index.php", destination: "/calendar", permanent: false },
-      { source: "/modules/tickets/index.php", destination: "/tickets", permanent: false },
-      { source: "/modules/tickets/create.php", destination: "/tickets/new", permanent: false },
-      { source: "/modules/service_request/index.php", destination: "/service-requests", permanent: false },
-      { source: "/modules/access_request/index.php", destination: "/access-requests", permanent: false },
-      { source: "/modules/pm_calendar/index.php", destination: "/pm-calendar", permanent: false },
-      { source: "/modules/assets_mgmt/index.php", destination: "/assets", permanent: false },
-      { source: "/modules/checkout/index.php", destination: "/checkout", permanent: false },
-      { source: "/modules/assets_mgmt/requests.php", destination: "/asset-requests", permanent: false },
-      { source: "/modules/qr_scanner/index.php", destination: "/qr-scanner", permanent: false },
-      { source: "/modules/asset_audit/index.php", destination: "/asset-audit", permanent: false },
-      { source: "/modules/licenses/index.php", destination: "/licenses", permanent: false },
-      { source: "/modules/subscriptions/index.php", destination: "/subscriptions", permanent: false },
-      { source: "/modules/budget/index.php", destination: "/budget", permanent: false },
-      { source: "/modules/licenses/by_asset.php", destination: "/licenses/by-asset", permanent: false },
-      { source: "/modules/vendors/index.php", destination: "/vendors", permanent: false },
-      { source: "/modules/vendors/create.php", destination: "/vendors/new", permanent: false },
-      { source: "/modules/vault/index.php", destination: "/vault", permanent: false },
-      { source: "/modules/settings/audit.php", destination: "/audit-log", permanent: false },
-      { source: "/modules/offboarding/index.php", destination: "/offboarding", permanent: false },
-      { source: "/modules/kb/index.php", destination: "/knowledge-base", permanent: false },
-      { source: "/modules/reports/index.php", destination: "/reports", permanent: false },
-      { source: "/modules/settings/users.php", destination: "/users", permanent: false },
-      { source: "/modules/settings/index.php", destination: "/settings", permanent: false },
-      { source: "/modules/settings/profile.php", destination: "/profile", permanent: false }
-    ];
+    return legacyRedirects.flatMap(([source, destination]) => [
+      { source, destination, permanent: false },
+      { source: `/itam-desk${source}`, destination, permanent: false }
+    ]);
   }
 };
 

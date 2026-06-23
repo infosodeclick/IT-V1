@@ -1064,6 +1064,15 @@ textarea:focus {
   font-weight: 950;
 }
 
+.scanner-frame video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
 .scanner-frame i {
   position: absolute;
   inset: 22px;
@@ -1071,9 +1080,38 @@ textarea:focus {
   border-radius: 8px;
 }
 
+.scanner-frame span {
+  position: relative;
+  z-index: 1;
+}
+
+.scanner-status {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .scanner-actions {
   display: flex;
   gap: 10px;
+}
+
+.input-with-icon {
+  position: relative;
+  display: block;
+}
+
+.input-with-icon svg {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--ink-soft);
+}
+
+.input-with-icon input {
+  padding-left: 36px;
 }
 
 .asset-card-list {

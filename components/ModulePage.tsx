@@ -2,6 +2,7 @@ import { Check, Download, Plus, RotateCcw, Save, Search, X } from "lucide-react"
 import Link from "next/link";
 
 import { createRecordAction, updateStatusAction } from "@/app/actions";
+import { QrScannerPanel } from "@/components/QrScannerPanel";
 import type { AppRecord, FieldDefinition, ModuleDefinition } from "@/lib/types";
 import { cx, formatDate, formatMoney, statusTone, valueFor } from "@/lib/utils";
 
@@ -271,38 +272,7 @@ function CalendarView({ records }: { records: AppRecord[] }) {
 }
 
 function QrView({ records }: { records: AppRecord[] }) {
-  return (
-    <section className="qr-layout">
-      <article className="panel scanner-panel">
-        <div className="scanner-frame">
-          <span>QR</span>
-          <i />
-        </div>
-        <div className="scanner-actions">
-          <button className="button primary" type="button">เปิดกล้อง</button>
-          <button className="button ghost" type="button">หยุด</button>
-        </div>
-        <label className="manual-scan">
-          <span>ค้นหา Asset Tag</span>
-          <input placeholder="เช่น IT-2569-00001" />
-        </label>
-      </article>
-      <article className="panel">
-        <div className="panel-head">
-          <h2>ผลลัพธ์ล่าสุด</h2>
-        </div>
-        <div className="asset-card-list">
-          {records.slice(0, 5).map((asset) => (
-            <div className="asset-mini" key={asset.id}>
-              <strong>{asset.code}</strong>
-              <span>{asset.title}</span>
-              <small>{asset.owner} · {asset.status}</small>
-            </div>
-          ))}
-        </div>
-      </article>
-    </section>
-  );
+  return <QrScannerPanel records={records} />;
 }
 
 function ReportsView({ records }: { records: AppRecord[] }) {

@@ -106,6 +106,11 @@ def main() -> None:
         expect(page.locator("#create input[name='company']")).to_have_value("BUGpairoj QA")
         expect(page.locator("#create input[name='itemsPerPage']")).to_have_value("25")
 
+        goto_ready(page, "/qr-scanner")
+        page.locator(".manual-scan input").fill("IT-2569-00001")
+        expect(page.get_by_text("IT-2569-00001").first).to_be_visible()
+        expect(page.get_by_text("Notebook Dell Latitude 7440").first).to_be_visible()
+
         page.set_viewport_size({"width": 390, "height": 900})
         goto_ready(page, "/dashboard")
         overflow = page.evaluate("document.documentElement.scrollWidth > window.innerWidth + 1")

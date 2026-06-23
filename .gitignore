@@ -1,0 +1,13 @@
+.next/
+node_modules/
+.env
+.env*.local
+data/local-db.json
+.playwright-cli/
+output/
+tsconfig.tsbuildinfo
+__pycache__/
+*.pyc
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

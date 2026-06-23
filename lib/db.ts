@@ -242,6 +242,18 @@ function rowToUser(row: Record<string, unknown>): AppUser {
   };
 }
 
+function dateOnly(value: unknown) {
+  if (!value) return null;
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+
+  const text = String(value);
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
+
+  const parsed = new Date(text);
+  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+  return text;
+}
+
 function rowToRecord(row: Record<string, unknown>): AppRecord {
   return {
     id: String(row.id),
@@ -254,7 +266,7 @@ function rowToRecord(row: Record<string, unknown>): AppRecord {
     category: row.category ? String(row.category) : null,
     owner: row.owner ? String(row.owner) : null,
     department: row.department ? String(row.department) : null,
-    dueDate: row.due_date ? String(row.due_date).slice(0, 10) : null,
+    dueDate: dateOnly(row.due_date),
     costMonthly: row.cost_monthly == null ? null : Number(row.cost_monthly),
     meta: (row.meta || {}) as RecordMeta,
     createdAt: new Date(String(row.created_at)).toISOString(),
